@@ -1,7 +1,7 @@
 Package: afCEC
 Type: Package
 Title: Active Function Cross-Entropy Clustering
-Version: 1.0.1
+Version: 1.0.2
 Date: 2018-01-04
 Author: Krzysztof Byrski [aut, cre], Przemyslaw Spurek [ctb]
 Maintainer: Krzysztof Byrski <krzysiek.byrski@uj.edu.pl>
@@ -12,6 +12,6 @@ NeedsCompilation: yes
 License: GPL (>= 2)
 Depends: R (>= 2.10), graphics, rgl
 LinkingTo: Rcpp, RcppArmadillo
-Packaged: 2018-01-04 12:18:08 UTC; Byrski Krzysztof
+Packaged: 2018-01-04 15:20:42 UTC; Byrski Krzysztof
 Repository: CRAN
-Date/Publication: 2018-01-04 12:25:53 UTC
+Date/Publication: 2018-01-04 17:27:35 UTC

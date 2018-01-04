@@ -4,7 +4,7 @@
 
 using namespace arma;
 
-#include <conio.h>
+// #include <conio.h>
 
 //   -*-   -*-   -*-
 
