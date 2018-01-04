@@ -8,7 +8,7 @@ using namespace Rcpp;
 
 // UpdateMeansForQuadraticFunction
 void UpdateMeansForQuadraticFunction(Rcpp::List& res);
-RcppExport SEXP afCEC_UpdateMeansForQuadraticFunction(SEXP resSEXP) {
+RcppExport SEXP _afCEC_UpdateMeansForQuadraticFunction(SEXP resSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::List& >::type res(resSEXP);
@@ -18,7 +18,7 @@ END_RCPP
 }
 // CalculateEllipsesOfConfidenceForQuadraticFunction
 Rcpp::List CalculateEllipsesOfConfidenceForQuadraticFunction(Rcpp::List res, double confidence, int segments);
-RcppExport SEXP afCEC_CalculateEllipsesOfConfidenceForQuadraticFunction(SEXP resSEXP, SEXP confidenceSEXP, SEXP segmentsSEXP) {
+RcppExport SEXP _afCEC_CalculateEllipsesOfConfidenceForQuadraticFunction(SEXP resSEXP, SEXP confidenceSEXP, SEXP segmentsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -31,7 +31,7 @@ END_RCPP
 }
 // CalculateEllipsoidsOfConfidenceForQuadraticFunction
 Rcpp::List CalculateEllipsoidsOfConfidenceForQuadraticFunction(Rcpp::List res, double confidence, int gridRes);
-RcppExport SEXP afCEC_CalculateEllipsoidsOfConfidenceForQuadraticFunction(SEXP resSEXP, SEXP confidenceSEXP, SEXP gridResSEXP) {
+RcppExport SEXP _afCEC_CalculateEllipsoidsOfConfidenceForQuadraticFunction(SEXP resSEXP, SEXP confidenceSEXP, SEXP gridResSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -44,7 +44,7 @@ END_RCPP
 }
 // afCECCppRoutine
 Rcpp::List afCECCppRoutine(const arma::mat& points, int maxClusters, const SEXP& initialLabels, double cardMin, double costThreshold, int minIterations, int maxIterations, int numberOfStarts, const std::string& method, const arma::mat& values, bool interactive);
-RcppExport SEXP afCEC_afCECCppRoutine(SEXP pointsSEXP, SEXP maxClustersSEXP, SEXP initialLabelsSEXP, SEXP cardMinSEXP, SEXP costThresholdSEXP, SEXP minIterationsSEXP, SEXP maxIterationsSEXP, SEXP numberOfStartsSEXP, SEXP methodSEXP, SEXP valuesSEXP, SEXP interactiveSEXP) {
+RcppExport SEXP _afCEC_afCECCppRoutine(SEXP pointsSEXP, SEXP maxClustersSEXP, SEXP initialLabelsSEXP, SEXP cardMinSEXP, SEXP costThresholdSEXP, SEXP minIterationsSEXP, SEXP maxIterationsSEXP, SEXP numberOfStartsSEXP, SEXP methodSEXP, SEXP valuesSEXP, SEXP interactiveSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -62,4 +62,17 @@ BEGIN_RCPP
     rcpp_result_gen = Rcpp::wrap(afCECCppRoutine(points, maxClusters, initialLabels, cardMin, costThreshold, minIterations, maxIterations, numberOfStarts, method, values, interactive));
     return rcpp_result_gen;
 END_RCPP
+}
+
+static const R_CallMethodDef CallEntries[] = {
+    {"_afCEC_UpdateMeansForQuadraticFunction", (DL_FUNC) &_afCEC_UpdateMeansForQuadraticFunction, 1},
+    {"_afCEC_CalculateEllipsesOfConfidenceForQuadraticFunction", (DL_FUNC) &_afCEC_CalculateEllipsesOfConfidenceForQuadraticFunction, 3},
+    {"_afCEC_CalculateEllipsoidsOfConfidenceForQuadraticFunction", (DL_FUNC) &_afCEC_CalculateEllipsoidsOfConfidenceForQuadraticFunction, 3},
+    {"_afCEC_afCECCppRoutine", (DL_FUNC) &_afCEC_afCECCppRoutine, 11},
+    {NULL, NULL, 0}
+};
+
+RcppExport void R_init_afCEC(DllInfo *dll) {
+    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
+    R_useDynamicSymbols(dll, FALSE);
 }

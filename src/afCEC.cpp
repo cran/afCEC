@@ -4,6 +4,8 @@
 
 using namespace arma;
 
+#include <conio.h>
+
 //   -*-   -*-   -*-
 
 unsigned seed = 0;
@@ -830,6 +832,106 @@ SEXP afCECLloyd(
 
 //   -*-   -*-   -*-
 
+void afCECHartiganRemoveCluster(
+    int clToRemove,
+    int pointsNum,
+    ivec &labels,
+    std::set<int> &activeClusters,
+    const mat &points,
+    int dim,
+    vec **m,
+    int *card,
+    mat ***sigmaL,
+    mat ***AL,
+    const mat &values,
+    int dimA,
+    vec ***b,
+    mat ***A,
+    double **sumOfSquares,
+    double *E,
+    int *bestAxes,
+    vec **coeffs,
+    double *variances
+) {
+    for (int j = 0; j < pointsNum; ++j) {
+        int cl = labels[j];
+        if (clToRemove == cl) {
+            double dEMinIncl = INFINITY;
+            int bestClIncl;
+            int bestAxisIncl;
+            double EMinIncl;
+            vec bestCoeffsIncl;
+            double bestVarIncl;
+
+            for (std::set<int>::iterator it2 = activeClusters.begin(); it2 != activeClusters.end(); ++it2) {
+                vec v = (points.submat(1, j, size(dim - 1, 1)) - m[*it2]->subvec(1, dim - 1)) / sqrt(((double)(card[*it2] + 1.0)));
+                for (int k = 0; k < dim; ++k) {
+                    mat sigmaLTmp = *sigmaL[*it2][k];
+                    vec vTmp = v;
+                    CholeskyRankOneUpdate(sigmaLTmp, vTmp);
+                    sigmaLTmp *= sqrt(card[*it2] / (card[*it2] + 1.0));
+                    double det = 1.0;
+                    for (int l = 0; l < dim - 1; ++l) det *= sigmaLTmp.at(l, l);
+
+                    mat ALTmp = *AL[*it2][k];
+                    vec vA = values.submat(k * dimA, j, size(dimA, 1));
+                    vec vATmp = vA;
+                    CholeskyRankOneUpdate(ALTmp, vATmp);
+                    vec bTmp = *b[*it2][k] + (points.at(k, j) * vA);
+                    vec y = solve(trimatl(ALTmp), bTmp);
+                    vec x = solve(trimatu(ALTmp.t()), y);
+                    mat ATmp = *A[*it2][k] + (vA * vA.t());
+                    double var = sumOfSquares[*it2][k] + (points.at(k, j) * points.at(k, j));
+                    var -= ((vec)(2.0 * x.t() * bTmp))[0];
+                    var += ((mat)(x.t() * ATmp * x)).at(0, 0);
+                    var /= (card[*it2] + 1);
+
+                    double prob = (card[*it2] + 1.0) / pointsNum;
+                    double EIncl = prob * (-log(prob) + (0.5 * ((dim * log(2.0 * M_PI * M_E)) + log(det * det * var))));
+                    if (!is_finite(EIncl)) throw "A numerical overflow occurred.";
+                    if (EIncl - E[*it2] < dEMinIncl) {
+                        dEMinIncl = EIncl - E[*it2];
+                        bestClIncl = *it2;
+                        bestAxisIncl = k;
+                        EMinIncl = EIncl;
+                        bestCoeffsIncl = x;
+                        bestVarIncl = var;
+                    }
+
+                    if (k < dim - 1) v[k] = (points.at(k, j) - (*m[*it2])[k]) / sqrt(((double)(card[*it2] + 1.0)));
+                }
+            }
+            if (dEMinIncl < INFINITY) {
+                vec v = (points.submat(1, j, size(dim - 1, 1)) - m[bestClIncl]->subvec(1, dim - 1)) / sqrt(((double)(card[bestClIncl] + 1.0)));
+                for (int k = 0; k < dim; ++k) {
+                    vec vTmp = v;
+                    CholeskyRankOneUpdate(*sigmaL[bestClIncl][k], vTmp);
+                    *sigmaL[bestClIncl][k] *= sqrt(card[bestClIncl] / (card[bestClIncl] + 1.0));
+
+                    vec vA = values.submat(k * dimA, j, size(dimA, 1));
+                    vec vATmp = vA;
+                    CholeskyRankOneUpdate(*AL[bestClIncl][k], vATmp);
+                    *b[bestClIncl][k] += points.at(k, j) * vA;
+                    *A[bestClIncl][k] += (vA * vA.t());
+
+                    sumOfSquares[bestClIncl][k] += points.at(k, j) * points.at(k, j);
+
+                    if (k < dim - 1) v[k] = (points.at(k, j) - (*m[bestClIncl])[k]) / sqrt(((double)(card[bestClIncl] + 1.0)));
+                }
+                *m[bestClIncl] = ((*m[bestClIncl] * card[bestClIncl]) + points.col(j)) / (card[bestClIncl] + 1.0);
+                bestAxes[bestClIncl] = bestAxisIncl;
+                E[bestClIncl] = EMinIncl;
+                ++card[bestClIncl];
+                labels[j] = bestClIncl;
+                *coeffs[bestClIncl] = bestCoeffsIncl;
+                variances[bestClIncl] = bestVarIncl;
+            }
+        }
+    }
+}
+
+//   -*-   -*-   -*-
+
 Rcpp::List afCECHartigan (
     const mat &points,
     int maxClusters,
@@ -870,9 +972,11 @@ Rcpp::List afCECHartigan (
     for (int i = 0; i < pointsNum; ++i) ++card[labels[i]];
     for (int i = 0; i < maxClusters; ++i) {
         if ((card[i] >= dim + 1) && (((double)card[i]) / pointsNum >= cardMin)) activeClusters.insert(activeClusters.end(), i);
-        else {
-            if (card[i] > 0) inactiveClusters.insert(inactiveClusters.end(), i);
-        }
+    }
+    if (activeClusters.size() == 0) {
+        for (int i = 0; i < pointsNum; ++i) labels[i] = 0;
+        activeClusters.insert(activeClusters.end(), 0);
+        card[0] = pointsNum;
     }
 
     m = new vec*[maxClusters];
@@ -992,13 +1096,19 @@ Rcpp::List afCECHartigan (
 
     //   -*-   -*-   -*-
 
+    //printf("---------------------------------\n");
+
     double ETotalOld;
     double ETotalNew = 0.0; // !!! !!! !!!
     for (std::set<int>::iterator it = activeClusters.begin(); it != activeClusters.end(); ++it) ETotalNew += E[*it];
     int numberOfIterations = 0;
     do {
+        //printf("%d\n", numberOfIterations);
+
         ETotalOld = ETotalNew;
         for (int i = 0; i < pointsNum; ++i) {
+            //printf("%d\n", i);
+
             int cl = labels[i];
             if (activeClusters.find(cl) != activeClusters.end()) {
                 double dEMinExcl = INFINITY;
@@ -1007,7 +1117,7 @@ Rcpp::List afCECHartigan (
                 vec bestCoeffsExcl;
                 double bestVarExcl;
                 try {
-                    vec v = (points.submat(1, i, size(dim - 1, 1)) - m[cl]->subvec(1, dim - 1)) / sqrt(card[cl] - 1);
+                    vec v = (points.submat(1, i, size(dim - 1, 1)) - m[cl]->subvec(1, dim - 1)) / sqrt(((double)(card[cl] - 1.0)));
                     for (int j = 0; j < dim; ++j) {
                         mat sigmaLTmp = *sigmaL[cl][j];
                         vec vTmp = v;
@@ -1040,11 +1150,32 @@ Rcpp::List afCECHartigan (
                             bestVarExcl = var;
                         }
 
-                        if (j < dim - 1) v[j] = (points.at(j, i) - (*m[cl])[j]) / sqrt(card[cl] - 1);
+                        if (j < dim - 1) v[j] = (points.at(j, i) - (*m[cl])[j]) / sqrt(((double)(card[cl] - 1.0)));
                     }
                 } catch (...) {
+                    //printf("WYWALAMY %d\n", cl);
                     activeClusters.erase(activeClusters.find(cl));
-                    inactiveClusters.insert(cl);
+                    afCECHartiganRemoveCluster(
+                        cl,
+                        pointsNum,
+                        labels,
+                        activeClusters,
+                        points,
+                        dim,
+                        m,
+                        card,
+                        sigmaL,
+                        AL,
+                        values,
+                        dimA,
+                        b,
+                        A,
+                        sumOfSquares,
+                        E,
+                        bestAxes,
+                        coeffs,
+                        variances
+                    );
                 }
                 if (activeClusters.find(cl) != activeClusters.end()) {
                     double dEMinIncl = INFINITY;
@@ -1055,7 +1186,7 @@ Rcpp::List afCECHartigan (
                     double bestVarIncl;
                     for (std::set<int>::iterator it = activeClusters.begin(); it != activeClusters.end(); ++it) {
                         if ((*it != cl) && (activeClusters.find(*it) != activeClusters.end())) {
-                            vec v = (points.submat(1, i, size(dim - 1, 1)) - m[*it]->subvec(1, dim - 1)) / sqrt(card[*it] + 1);
+                            vec v = (points.submat(1, i, size(dim - 1, 1)) - m[*it]->subvec(1, dim - 1)) / sqrt(((double)(card[*it] + 1.0)));
                             for (int j = 0; j < dim; ++j) {
                                 mat sigmaLTmp = *sigmaL[*it][j];
                                 vec vTmp = v;
@@ -1089,13 +1220,13 @@ Rcpp::List afCECHartigan (
                                     bestVarIncl = var;
                                 }
 
-                                if (j < dim - 1) v[j] = (points.at(j, i) - (*m[*it])[j]) / sqrt(card[*it] + 1);
+                                if (j < dim - 1) v[j] = (points.at(j, i) - (*m[*it])[j]) / sqrt(((double)(card[*it] + 1.0)));
                             }
 
                         }
                     }
                     if (dEMinExcl + dEMinIncl < 0.0) {
-                        vec v = (points.submat(1, i, size(dim - 1, 1)) - m[cl]->subvec(1, dim - 1)) / sqrt(card[cl] - 1);
+                        vec v = (points.submat(1, i, size(dim - 1, 1)) - m[cl]->subvec(1, dim - 1)) / sqrt(((double)(card[cl] - 1.0)));
                         for (int j = 0; j < dim; ++j) {
                             vec vTmp = v;
                             CholeskyRankOneDowndate(*sigmaL[cl][j], vTmp);
@@ -1109,9 +1240,9 @@ Rcpp::List afCECHartigan (
 
                             sumOfSquares[cl][j] -= points.at(j, i) * points.at(j, i);
 
-                            if (j < dim - 1) v[j] = (points.at(j, i) - (*m[cl])[j]) / sqrt(card[cl] - 1);
+                            if (j < dim - 1) v[j] = (points.at(j, i) - (*m[cl])[j]) / sqrt(((double)(card[cl] - 1.0)));
                         }
-                        v = (points.submat(1, i, size(dim - 1, 1)) - m[bestClIncl]->subvec(1, dim - 1)) / sqrt(card[bestClIncl] + 1);
+                        v = (points.submat(1, i, size(dim - 1, 1)) - m[bestClIncl]->subvec(1, dim - 1)) / sqrt(((double)(card[bestClIncl] + 1.0)));
                         for (int j = 0; j < dim; ++j) {
                             vec vTmp = v;
                             CholeskyRankOneUpdate(*sigmaL[bestClIncl][j], vTmp);
@@ -1125,7 +1256,7 @@ Rcpp::List afCECHartigan (
 
                             sumOfSquares[bestClIncl][j] += points.at(j, i) * points.at(j, i); //Było: sumOfSquares[cl][j] += points.at(j, i) * points.at(j, i);
 
-                            if (j < dim - 1) v[j] = (points.at(j, i) - (*m[bestClIncl])[j]) / sqrt(card[bestClIncl] + 1);
+                            if (j < dim - 1) v[j] = (points.at(j, i) - (*m[bestClIncl])[j]) / sqrt(((double)(card[bestClIncl] + 1.0)));
                         }
                         *m[cl] = ((*m[cl] * card[cl]) - points.col(i)) / (card[cl] - 1.0);
                         *m[bestClIncl] = ((*m[bestClIncl] * card[bestClIncl]) + points.col(i)) / (card[bestClIncl] + 1.0);
@@ -1141,94 +1272,56 @@ Rcpp::List afCECHartigan (
                         *coeffs[cl] = bestCoeffsExcl;
                         *coeffs[bestClIncl] = bestCoeffsIncl;
                         if (((double)card[cl]) / pointsNum < cardMin) {
-                            inactiveClusters.insert(cl);
-                            activeClusters.erase(cl);
+                            //printf("WYWALAMY %d\n", cl);
+                            activeClusters.erase(activeClusters.find(cl));
+                            afCECHartiganRemoveCluster(
+                                cl,
+                                pointsNum,
+                                labels,
+                                activeClusters,
+                                points,
+                                dim,
+                                m,
+                                card,
+                                sigmaL,
+                                AL,
+                                values,
+                                dimA,
+                                b,
+                                A,
+                                sumOfSquares,
+                                E,
+                                bestAxes,
+                                coeffs,
+                                variances
+                            );
                         }
                     }
                 }
+            } else {
+                //printf("WYWALAMY %d\n", cl);
+                afCECHartiganRemoveCluster(
+                    cl,
+                    pointsNum,
+                    labels,
+                    activeClusters,
+                    points,
+                    dim,
+                    m,
+                    card,
+                    sigmaL,
+                    AL,
+                    values,
+                    dimA,
+                    b,
+                    A,
+                    sumOfSquares,
+                    E,
+                    bestAxes,
+                    coeffs,
+                    variances
+                );
             }
-
-            //   -*-   -*-   -*-
-
-            for (std::set<int>::iterator it1 = inactiveClusters.begin(); it1 != inactiveClusters.end(); ++it1) {
-                for (int j = 0; j < pointsNum; ++j) {
-                    int cl = labels[j];
-                    if (*it1 == cl) {
-                        double dEMinIncl = INFINITY;
-                        int bestClIncl;
-                        int bestAxisIncl;
-                        double EMinIncl;
-                        vec bestCoeffsIncl;
-                        double bestVarIncl;
-
-                        for (std::set<int>::iterator it2 = activeClusters.begin(); it2 != activeClusters.end(); ++it2) {
-                            vec v = (points.submat(1, j, size(dim - 1, 1)) - m[*it2]->subvec(1, dim - 1)) / sqrt(card[*it2] + 1);
-                            for (int k = 0; k < dim; ++k) {
-                                mat sigmaLTmp = *sigmaL[*it2][k];
-                                vec vTmp = v;
-                                CholeskyRankOneUpdate(sigmaLTmp, vTmp);
-                                sigmaLTmp *= sqrt(card[*it2] / (card[*it2] + 1.0));
-                                double det = 1.0;
-                                for (int l = 0; l < dim - 1; ++l) det *= sigmaLTmp.at(l, l);
-
-                                mat ALTmp = *AL[*it2][k];
-                                vec vA = values.submat(k * dimA, j, size(dimA, 1));
-                                vec vATmp = vA;
-                                CholeskyRankOneUpdate(ALTmp, vATmp);
-                                vec bTmp = *b[*it2][k] + (points.at(k, j) * vA);
-                                vec y = solve(trimatl(ALTmp), bTmp);
-                                vec x = solve(trimatu(ALTmp.t()), y);
-                                mat ATmp = *A[*it2][k] + (vA * vA.t());
-                                double var = sumOfSquares[*it2][k] + (points.at(k, j) * points.at(k, j));
-                                var -= ((vec)(2.0 * x.t() * bTmp))[0];
-                                var += ((mat)(x.t() * ATmp * x)).at(0, 0);
-                                var /= (card[*it2] + 1);
-
-                                double prob = (card[*it2] + 1.0) / pointsNum;
-                                double EIncl = prob * (-log(prob) + (0.5 * ((dim * log(2.0 * M_PI * M_E)) + log(det * det * var))));
-                                if (!is_finite(EIncl)) throw "A numerical overflow occurred.";
-                                if (EIncl - E[*it2] < dEMinIncl) {
-                                    dEMinIncl = EIncl - E[*it2];
-                                    bestClIncl = *it2;
-                                    bestAxisIncl = k;
-                                    EMinIncl = EIncl;
-                                    bestCoeffsIncl = x;
-                                    bestVarIncl = var;
-                                }
-
-                                if (k < dim - 1) v[k] = (points.at(k, j) - (*m[*it2])[k]) / sqrt(card[*it2] + 1);
-                            }
-                        }
-                        if (dEMinIncl < INFINITY) {
-                            vec v = (points.submat(1, j, size(dim - 1, 1)) - m[bestClIncl]->subvec(1, dim - 1)) / sqrt(card[bestClIncl] + 1);
-                            for (int k = 0; k < dim; ++k) {
-                                vec vTmp = v;
-                                CholeskyRankOneUpdate(*sigmaL[bestClIncl][k], vTmp);
-                                *sigmaL[bestClIncl][k] *= sqrt(card[bestClIncl] / (card[bestClIncl] + 1.0));
-
-                                vec vA = values.submat(k * dimA, j, size(dimA, 1));
-                                vec vATmp = vA;
-                                CholeskyRankOneUpdate(*AL[bestClIncl][k], vATmp);
-                                *b[bestClIncl][k] += points.at(k, j) * vA;
-                                *A[bestClIncl][k] += (vA * vA.t());
-
-                                sumOfSquares[bestClIncl][k] += points.at(k, j) * points.at(k, j);
-
-                                if (k < dim - 1) v[k] = (points.at(k, j) - (*m[bestClIncl])[k]) / sqrt(card[bestClIncl] + 1);
-                            }
-                            *m[bestClIncl] = ((*m[bestClIncl] * card[bestClIncl]) + points.col(j)) / (card[bestClIncl] + 1.0);
-                            bestAxes[bestClIncl] = bestAxisIncl;
-                            E[bestClIncl] = EMinIncl;
-                            ++card[bestClIncl];
-                            labels[j] = bestClIncl;
-                            *coeffs[bestClIncl] = bestCoeffsIncl;
-                            variances[bestClIncl] = bestVarIncl;
-                        }
-                    }
-                }
-            }
-            inactiveClusters.clear();
-
         }
         ETotalNew = 0.0;
         for (std::set<int>::iterator it = activeClusters.begin(); it != activeClusters.end(); ++it) ETotalNew += E[*it];
@@ -1445,7 +1538,7 @@ Rcpp::List afCECCppRoutine (
                 case STRSXP : {
                     if (initialLabelsStr == "random") {
                         //for (int j = 0; j < pointsNum; ++j) labels[j] = (RandomInteger() & 2147483647) % maxClusters;
-                        for (int j = 0; j < pointsNum; ++j) labels[j] = RandomInteger() % maxClusters;
+                        for (int j = 0; j < pointsNum; ++j) labels[j] = (RandomInteger() & 2147483647) % maxClusters;
                     } else {
                         // We perform the k-means++ algorithm.
                         mat centers(dim, maxClusters);
@@ -1508,7 +1601,7 @@ Rcpp::List afCECCppRoutine (
             Rcpp::List res;
             if (method == "Lloyd") res = afCECLloyd(points, maxClusters, labels, cardMin, costThreshold, minIterations, maxIterations, values, interactive);
             else {
-                res = afCECHartigan(points, maxClusters, labels, costThreshold, cardMin, minIterations, maxIterations, values, interactive);
+                res = afCECHartigan(points, maxClusters, labels, cardMin, costThreshold, minIterations, maxIterations, values, interactive);
 
                 //CafCECHartigan afCECHartigan(points, maxClusters, labels, cardMin, minIterations, maxIterations, 0.0, values, interactive);
                 //res = afCECHartigan.res;

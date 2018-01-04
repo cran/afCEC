@@ -2,18 +2,18 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 UpdateMeansForQuadraticFunction <- function(res) {
-    invisible(.Call('afCEC_UpdateMeansForQuadraticFunction', PACKAGE = 'afCEC', res))
+    invisible(.Call(`_afCEC_UpdateMeansForQuadraticFunction`, res))
 }
 
 CalculateEllipsesOfConfidenceForQuadraticFunction <- function(res, confidence, segments) {
-    .Call('afCEC_CalculateEllipsesOfConfidenceForQuadraticFunction', PACKAGE = 'afCEC', res, confidence, segments)
+    .Call(`_afCEC_CalculateEllipsesOfConfidenceForQuadraticFunction`, res, confidence, segments)
 }
 
 CalculateEllipsoidsOfConfidenceForQuadraticFunction <- function(res, confidence, gridRes) {
-    .Call('afCEC_CalculateEllipsoidsOfConfidenceForQuadraticFunction', PACKAGE = 'afCEC', res, confidence, gridRes)
+    .Call(`_afCEC_CalculateEllipsoidsOfConfidenceForQuadraticFunction`, res, confidence, gridRes)
 }
 
 afCECCppRoutine <- function(points, maxClusters, initialLabels, cardMin, costThreshold, minIterations, maxIterations, numberOfStarts, method, values, interactive) {
-    .Call('afCEC_afCECCppRoutine', PACKAGE = 'afCEC', points, maxClusters, initialLabels, cardMin, costThreshold, minIterations, maxIterations, numberOfStarts, method, values, interactive)
+    .Call(`_afCEC_afCECCppRoutine`, points, maxClusters, initialLabels, cardMin, costThreshold, minIterations, maxIterations, numberOfStarts, method, values, interactive)
 }
 
